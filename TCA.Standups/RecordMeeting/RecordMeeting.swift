@@ -15,6 +15,10 @@ struct RecordMeetingFeature {
     @Dependency(\.continuousClock) var clock
     @Dependency(\.speechClient) var speechClient
     @Dependency(\.dismiss) var dismiss
+
+    enum CancelID {
+        case timer
+    }
     
     @ObservableState
     struct State: Equatable {
@@ -58,15 +62,21 @@ struct RecordMeetingFeature {
                 return .none
                 
             case .alert(.presented(.confirmDiscard)):
-                return .run { _ in await self.dismiss() }
+                return .merge(
+                    .cancel(id: CancelID.timer),
+                    .run { _ in await self.dismiss() }
+                )
                 
             case .alert(.presented(.confirmSave)):
-                return .run { [transcript = state.transcript] send in
-                    await send(
-                        .delegate(.saveMeeting(transcript: transcript))
-                    )
-                    await self.dismiss()
-                }
+                return .merge(
+                    .cancel(id: CancelID.timer),
+                    .run { [transcript = state.transcript] send in
+                        await send(
+                            .delegate(.saveMeeting(transcript: transcript))
+                        )
+                        await self.dismiss()
+                    }
+                )
                 
             case .alert(.dismiss):
                 return .none
@@ -75,7 +85,7 @@ struct RecordMeetingFeature {
                 return .none
                 
             case .endMeetingButtonTapped:
-                state.alert = .endMeeting(isDiscardable: false)
+                state.alert = .endMeeting(isDiscardable: true)
                 
                 return .none
                 
@@ -95,6 +105,7 @@ struct RecordMeetingFeature {
                 
             case .onTask:
                 return .run(operation: onTask)
+                    .cancellable(id: CancelID.timer, cancelInFlight: true)
                 
             case .timerTicked:
                 guard state.alert == nil else { return .none }
@@ -104,12 +115,17 @@ struct RecordMeetingFeature {
                 
                 if state.secondsElapsed.isMultiple(of: secondsPerAttendee) {
                     if state.speakerIndex == state.standup.attendees.count - 1 {
-                        return .run { [transcript = state.transcript] send in
-                            await send(
-                                .delegate(.saveMeeting(transcript: transcript))
-                            )
-                            await dismiss()
-                        }
+                        return .concatenate(
+                            .run { [transcript = state.transcript] send in
+                                await send(
+                                    .delegate(.saveMeeting(transcript: transcript))
+                                )
+                            },
+                            .cancel(id: CancelID.timer),
+                            .run { _ in
+                                await dismiss()
+                            }
+                        )
                     }
                     state.speakerIndex += 1
                 }

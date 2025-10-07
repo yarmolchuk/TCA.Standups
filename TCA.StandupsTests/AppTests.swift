@@ -7,6 +7,7 @@
 
 @preconcurrency import ComposableArchitecture
 import XCTest
+import Dependencies
 
 @testable import TCA_Standups
 internal import Speech
@@ -15,6 +16,7 @@ internal import Speech
 final class AppTests: XCTestCase {
     func testEdit() async {
         let standup = Standup.mock
+        let clock = TestClock()
         let store = TestStore(
             initialState: AppFeature.State(
                 standupsList: StandupsListFeature.State()
@@ -96,80 +98,77 @@ final class AppTests: XCTestCase {
         }
     }
     
-//    func testDeletion_NonExhaustive() async {
-//        let standup = Standup.mock
-//        let store = TestStore(
-//            initialState: AppFeature.State(
-//                standupsList: StandupsListFeature.State(),
-//                path: StackState([ .detail(StandupDetailFeature.State(standup: standup)) ])
-//            )
-//        ) {
-//            AppFeature()
-//        } withDependencies: {
-//            $0.continuousClock = ImmediateClock()
-//            $0.dataManager = .mock(initialData: try? JSONEncoder().encode([standup]))
-//        }
-//        store.exhaustivity = .off
-//
-//        await store.send(
-//            .path(.element(id: 0, action: .detail(.deleteButtonTapped)))
-//        )
-//        await store.send(
-//            .path(.element(id: 0, action: .detail(.alert(.presented(.confirmDeletion)))))
-//        )
-//        await store.skipReceivedActions()
-//
-//        store.assert {
-//            $0.path = StackState([])
-//            $0.standupsList.standups = []
-//        }
-//    }
+    func testDeletion_NonExhaustive() async {
+        let standup = Standup.mock
+        let store = TestStore(
+            initialState: AppFeature.State(
+                standupsList: StandupsListFeature.State(),
+                path: StackState([ .detail(StandupDetailFeature.State(standup: standup)) ])
+            )
+        ) {
+            AppFeature()
+        } withDependencies: {
+            $0.continuousClock = ImmediateClock()
+            $0.dataManager = .mock(initialData: try? JSONEncoder().encode([standup]))
+        }
+        store.exhaustivity = .off
+
+        await store.send(
+            .path(.element(id: 0, action: .detail(.deleteButtonTapped)))
+        )
+        await store.send(
+            .path(.element(id: 0, action: .detail(.destination(.presented(.alert(.confirmDeletion))))))
+        )
+        await store.skipReceivedActions()
+
+        store.assert {
+            $0.path = StackState([])
+            $0.standupsList.standups = []
+        }
+    }
     
-//    func _testTimerRunOutEndMeeting() async {
-//        let standup = Standup(
-//            id: UUID(),
-//            attendees: [Attendee(id: UUID())],
-//            duration: .seconds(1),
-//            meetings: [],
-//            theme: .bubblegum,
-//            title: "Point-Free"
-//        )
-//        let store: TestStoreOf<AppFeature> = TestStore(
-//            initialState: AppFeature.State(
-//                standupsList: StandupsListFeature.State(),
-//                path: StackState([
-//                    .detail(StandupDetailFeature.State(standup: standup)),
-//                    .recordMeeting(RecordMeetingFeature.State(standup: standup)),
-//                ])
-//            )
-//        ) {
-//            AppFeature()
-//        } withDependencies: {
-//            $0.continuousClock = ImmediateClock()
-//            $0.date.now = Date(timeIntervalSince1970: 1234567890)
-//            $0.speechClient.requestAuthorization = { .denied }
-//            $0.uuid = .incrementing
-//            $0.dataManager = .mock(initialData: try? JSONEncoder().encode([standup]))
-//        }
-//        store.exhaustivity = .off
-//        
-//        await store.send(.path(.element(id: 1, action: .recordMeeting(.onTask))))
-//        // await store.receive(\.path[id: 1].recordMeeting.delegate.saveMeeting) // TODO: Fix me
-//        await store.receive(\.path.popFrom)
-//        
-//        await store.skipReceivedActions()
-//        
-//        store.assert {
-//            $0.path[id: 0, case: \.detail]?.standup.meetings = [
-//                Meeting(
-//                    id: UUID(0),
-//                    date: Date(timeIntervalSince1970: 1234567890),
-//                    transcript: ""
-//                )
-//            ]
-//            XCTAssertEqual($0.path.count, 1)
-//        }
-//    }
+    func testTimerRunOutEndMeeting() async {
+        let standup = Standup(
+            id: UUID(),
+            attendees: [Attendee(id: UUID())],
+            duration: .seconds(1),
+            meetings: [],
+            theme: .bubblegum,
+            title: "Point-Free"
+        )
+        let store: TestStoreOf<AppFeature> = TestStore(
+            initialState: AppFeature.State(
+                standupsList: StandupsListFeature.State(),
+                path: StackState([
+                    .detail(StandupDetailFeature.State(standup: standup)),
+                    .recordMeeting(RecordMeetingFeature.State(standup: standup)),
+                ])
+            )
+        ) {
+            AppFeature()
+        } withDependencies: {
+            $0.continuousClock = ImmediateClock()
+            $0.date.now = Date(timeIntervalSince1970: 1234567890)
+            $0.speechClient.requestAuthorization = { .denied }
+            $0.uuid = .incrementing
+            $0.dataManager = .mock(initialData: try? JSONEncoder().encode([standup]))
+        }
+        store.exhaustivity = .off
+        
+        await store.send(.path(.element(id: 1, action: .recordMeeting(.onTask))))
+        await store.skipReceivedActions()
+        
+        store.assert {
+            $0.path[id: 0, case: \.detail]?.standup.meetings = [
+                Meeting(
+                    id: UUID(0),
+                    date: Date(timeIntervalSince1970: 1234567890),
+                    transcript: ""
+                )
+            ]
+            XCTAssertEqual($0.path.count, 1)
+        }
+    }
     
     func testEndMeetingEarlyDiscard() async {
         let standup = Standup(
@@ -208,61 +207,61 @@ final class AppTests: XCTestCase {
         }
     }
     
-//    func testTimerRunOutEndMeeting_WithSpeechRecognizer() async {
-//        let standup = Standup(
-//            id: UUID(),
-//            attendees: [Attendee(id: UUID())],
-//            duration: .seconds(1),
-//            meetings: [],
-//            theme: .bubblegum,
-//            title: "Point-Free"
-//        )
-//
-//        let store = TestStore(
-//            initialState: AppFeature.State(
-//                standupsList: StandupsListFeature.State(),
-//                path: StackState([
-//                    .detail(
-//                        StandupDetailFeature.State(standup: standup)
-//                    ),
-//                    .recordMeeting(
-//                        RecordMeetingFeature.State(standup: standup)
-//                    ),
-//                ])
-//            )
-//        ) {
-//            AppFeature()
-//        } withDependencies: {
-//            $0.continuousClock = ImmediateClock()
-//            $0.date.now = Date(timeIntervalSince1970: 1234567890)
-//            $0.uuid = .incrementing
-//            $0.speechClient.requestAuthorization = { .authorized }
-//            $0.speechClient.start = {
-//                AsyncThrowingStream {
-//                    $0.yield("This was a good meeting!")
-//                }
-//            }
-//            $0.dataManager = .mock(initialData: try? JSONEncoder().encode([standup]))
-//            $0.uuid = .incrementing
-//        }
-//        store.exhaustivity = .off
-//
-//        await store.send(
-//            .path(.element(id: 1, action: .recordMeeting(.onTask)))
-//        )
-//        await store.skipReceivedActions()
-//        store.assert {
-//            $0.path[id: 0, case: \.detail]?
-//                .standup.meetings = [
-//                    Meeting(
-//                        id: UUID(0),
-//                        date: Date(timeIntervalSince1970: 1234567890),
-//                        transcript: "This was a good meeting!"
-//                    )
-//                ]
-//            XCTAssertEqual($0.path.count, 1)
-//        }
-//    }
+    func testTimerRunOutEndMeeting_WithSpeechRecognizer() async {
+        let standup = Standup(
+            id: UUID(),
+            attendees: [Attendee(id: UUID())],
+            duration: .seconds(1),
+            meetings: [],
+            theme: .bubblegum,
+            title: "Point-Free"
+        )
+
+        let store = TestStore(
+            initialState: AppFeature.State(
+                standupsList: StandupsListFeature.State(),
+                path: StackState([
+                    .detail(
+                        StandupDetailFeature.State(standup: standup)
+                    ),
+                    .recordMeeting(
+                        RecordMeetingFeature.State(standup: standup)
+                    ),
+                ])
+            )
+        ) {
+            AppFeature()
+        } withDependencies: {
+            $0.continuousClock = ImmediateClock()
+            $0.date.now = Date(timeIntervalSince1970: 1234567890)
+            $0.uuid = .incrementing
+            $0.speechClient.requestAuthorization = { .authorized }
+            $0.speechClient.start = {
+                AsyncThrowingStream {
+                    $0.yield("This was a good meeting!")
+                }
+            }
+            $0.dataManager = .mock(initialData: try? JSONEncoder().encode([standup]))
+            $0.uuid = .incrementing
+        }
+        store.exhaustivity = .off
+
+        await store.send(
+            .path(.element(id: 1, action: .recordMeeting(.onTask)))
+        )
+        await store.skipReceivedActions()
+        store.assert {
+            $0.path[id: 0, case: \.detail]?
+                .standup.meetings = [
+                    Meeting(
+                        id: UUID(0),
+                        date: Date(timeIntervalSince1970: 1234567890),
+                        transcript: "This was a good meeting!"
+                    )
+                ]
+            XCTAssertEqual($0.path.count, 1)
+        }
+    }
     
     func testAdd() async {
         let store = TestStore(

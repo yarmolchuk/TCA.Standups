@@ -84,11 +84,11 @@ struct StandupDetailFeature: Reducer {
                 return .none
                 
             case .destination(.presented(.alert(.confirmDeletion))):
-                // TODO: Delete this standup
-                return .run { _ in
+                return .run { [id = state.standup.id] send in
+                    await send(.delegate(.deleteStandup(id: id)))
                     await self.dismiss()
                 }
-               
+                               
             case .destination:
                 return .none
                 
@@ -107,9 +107,9 @@ struct StandupDetailFeature: Reducer {
         .ifLet(\.$destination, action: \.destination) {
             Destination()
         }
-        .onChange(of: \.standup) { oldValue, newStandup in
+        .onChange(of: \.standup) { oldValue, newValue in
             Reduce { state, action in
-                    .send(.delegate(.standupUpdated(newStandup)))
+                .send(.delegate(.standupUpdated(newValue)))
             }
         }
     }

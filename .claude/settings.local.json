@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(xcodebuild:*)",
+      "Read(//Users/MAC/Library/Developer/Xcode/DerivedData/**)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
